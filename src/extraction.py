@@ -77,7 +77,7 @@ class LessonsNoteGenerator():
     def generate_dialogue(self):
 
         template = """
-            The text delimited by triple single quotes is a real conversation between two people, one being an English tutor and the other a student. The student want the tutor help him improve his spoken english. Please help me organize the conversation between the two and use the output format I provide.
+            The text delimited by triple single quotes is a real conversation between two people, one being an English tutor and the other a student. The student want the tutor to help him improve his spoken english. Please organize the conversation between the two and use the output format I provide.
 
             '''{sample_text}'''
             
@@ -121,24 +121,23 @@ class LessonsNoteGenerator():
         {docs}
         ```
         
-        I want to summarize the key points in the conversation and create a english learning note. Please help the student identify the difficult words, phrases, and grammar that appeared in the conversation. For any sentence the student said, please help the student to correct the grammar and rephrase the sentence in a more authentic way. 
+        I want to summarize the key points in the conversation and create a english learning note. Please help the student identify the advanced words and phrases that appeared in the conversation. For any sentence the student said, please help the student to correct the grammar and rephrase the sentence in a more authentic way. 
         You should use the following output format:
 
         ```
-        
         ### words and phrases:
-        1. <word or phrase 1>: your explanation and example sentence
-        2. <word or phrase 2>: your explanation and example sentence
+        1. **word or phrase 1**:
+        2. **word or phrase 2**:
 
         continue to find the words and phrases until the end of the conversation.
         
         ### Expression1:
-        - Original sentence: <original sentence 1>
-        - The more authentic expression: <more authentic expression 1>
+        - Original: <original sentence 1>
+        - Authentic: <more authentic expression 1>
 
         ### Expression2:
-        - Original sentence: <original sentence 2>
-        - The more authentic expression: <more authentic expression 2>
+        - Original: <original sentence 2>
+        - Authentic: <more authentic expression 2>
 
         continue to find all the expressions until the end of the conversation.
 
@@ -159,18 +158,18 @@ class LessonsNoteGenerator():
         
         ```
         ### words and phrases:
-        1. <word or phrase 1>: your explanation and example sentence
-        2. <word or phrase 2>: your explanation and example sentence
+        1. **word or phrase 1**
+        2. **word or phrase 2**
 
         please list all the words and phrases
         
         ### Expression1:
-        - Original sentence: <original sentence 1>
-        - The more authentic expression: <more authentic expression 1>
+        - Original: <original sentence 1>
+        - Authentic: <more authentic expression 1>
 
         ### Expression2:
-        - Original sentence: <original sentence 2>
-        - The more authentic expression: <more authentic expression 2>
+        - Original: <original sentence 2>
+        - Authentic: <more authentic expression 2>
 
         please list all the expressions
 
@@ -194,7 +193,7 @@ class LessonsNoteGenerator():
             # If documents exceed context for `StuffDocumentsChain`
             collapse_documents_chain=combine_documents_chain,
             # The maximum number of tokens to group documents into.
-            token_max=4000,
+            token_max=8000,
         )
 
         # Combining documents by mapping a chain over them, then combining results
@@ -220,15 +219,7 @@ class LessonsNoteGenerator():
 
         # combine the dialogues and summary into a single document with markdown formatting
 
-        notes = f"""
-        # Lesson Notes
-
-        ## Dialogues
-        {dialogues}
-
-        ## Summary
-        {summary}
-        """
+        notes = f"""# Lesson Notes\n\n## Dialogues\n{dialogues}\n\n## Summary\n{summary}\n"""
 
         return notes
 

@@ -38,6 +38,7 @@
 
 from src.audio2text import WhisperDecode
 from src.extraction import LessonsNoteGenerator
+from src.utils import convert_markdown_to_pdf
 from time import time
 import os
 
@@ -48,11 +49,12 @@ def main():
     input_file_path = "./lessons/2023-10-17-Zariah.mp4"
     transcription_output_path = os.path.join(
         os.path.dirname(input_file_path),
-        os.path.basename(input_file_path).split(".")[0] + ".txt") 
+        os.path.basename(input_file_path).split(".")[0] + ".txt")
 
     if not os.path.exists(transcription_output_path):
         whisper = WhisperDecode(model)
-        transcription = whisper.decode(input_file_path, transcription_output_path)
+        transcription = whisper.decode(input_file_path,
+                                       transcription_output_path)
         print("Transcription complete!")
     else:
         with open(transcription_output_path, "r") as f:
@@ -60,9 +62,13 @@ def main():
 
     lesson_note_output_path = os.path.join(
         os.path.dirname(input_file_path),
-        os.path.basename(input_file_path).split(".")[0] + "-lesson_note.md")
+        os.path.basename(input_file_path).split(".")[0] + "-lesson-note.md")
     lesson_note_generator = LessonsNoteGenerator(text_content=transcription)
     lesson_note_generator.run(lesson_note_output_path)
+
+    convert_markdown_to_pdf(lesson_note_output_path,
+                            lesson_note_output_path.replace(".md", ".pdf"))
+
 
 if __name__ == "__main__":
 
