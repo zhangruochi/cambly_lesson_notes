@@ -1,0 +1,5 @@
+.env
+__pychache__/
+*.pyc
+*.txt
+*.mp4
