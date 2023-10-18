@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Tue Oct 17 2023
+# Last Modified: Wed Oct 18 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -41,12 +41,14 @@ from dotenv import load_dotenv
 import openai
 from langchain.chat_models import ChatOpenAI
 from langchain import PromptTemplate
+from langchain.chains.summarize import load_summarize_chain
 from langchain.chains import LLMChain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains.combine_documents.stuff import StuffDocumentsChain
-from langchain.chains import ReduceDocumentsChain, MapReduceDocumentsChain
 
 from tqdm import tqdm
+import json
+from typing import Dict, List
+from collections import defaultdict
 
 # load .env
 load_dotenv()
@@ -74,28 +76,24 @@ class LessonsNoteGenerator():
         text_chunks = text_splitter.create_documents([text_content])
         return text_chunks
 
-    def generate_dialogue(self):
+    def generate_dialogue(self) -> Dict:
 
         template = """
             The text delimited by triple single quotes is a real conversation between two people, one being an English tutor and the other a student. The student want the tutor to help him improve his spoken english. Please organize the conversation between the two and use the output format I provide.
 
             '''{sample_text}'''
             
-            IMPORTANT: Do not modify any words or phrases in the conversation, do not rephrase the sentences.
+            IMPORTANT: Do not modify any words or phrases in the conversation, do not rephrase the sentences. Folloing the JSON format below strictly is the key to success.
 
-            OUTPUT FORMAT:
-            ```
-            **Tutor**: <The sentences tutor have talked about>
-
-            **Student**: <The sentences student have talked about>
-
-            **Tutor**: <The sentences tutor have talked about>
-
-            **Student**: <The sentences student have talked about>
-
-            continue the above format until the end of the conversation.
-            
-            ```
+            OUTPUT JSON FORMAT:
+            {{
+                dialogues: [
+                    {{tutor: <tutor's expression 1>, student: <student's expression 1>}},
+                    {{tutor: <tutor's expression 2>, student: <student's expression 2>}},
+                    {{tutor: <tutor's expression 3>, student: <student's expression 3>}},
+                    ... 
+            }}
+            Output:
             """
         prompt_template = PromptTemplate.from_template(template=template)
 
@@ -110,9 +108,14 @@ class LessonsNoteGenerator():
                          desc="Generating dialogues"):
             dialogues.append(llm_chain.run(text.page_content))
 
-        return "\n".join(dialogues)
+        dialogues_dict = defaultdict(list)
+        for _ in dialogues:
+            _ = json.loads(_)
+            dialogues_dict["dialogues"].extend(_["dialogues"])
 
-    def generate_summary(self):
+        return dialogues_dict
+
+    def generate_summary(self) -> Dict:
 
         # Map
         map_template = """The following text delimited by triple single quotes is a set of dialogues between an english tutor and a student:
@@ -121,105 +124,110 @@ class LessonsNoteGenerator():
         {docs}
         ```
         
-        I want to summarize the key points in the conversation and create a english learning note. Please help the student identify the advanced words and phrases that appeared in the conversation. For any sentence the student said, please help the student to correct the grammar and rephrase the sentence in a more authentic way. 
-        You should use the following output format:
+        Please identify the advanced words and phrases that appeared in the conversation. For each paragraph spoken by the student(do not separate into sentences, use the students' each complete expression.), please correct the grammar and rephrase the expression in a more native and authentic way. 
+        IMPORTANT: Folloing the JSON format below strictly is the key to success:
 
         ```
-        ### words and phrases:
-        1. **word or phrase 1**:
-        2. **word or phrase 2**:
-
-        continue to find the words and phrases until the end of the conversation.
-        
-        ### Expression1:
-        - Original: <original sentence 1>
-        - Authentic: <more authentic expression 1>
-
-        ### Expression2:
-        - Original: <original sentence 2>
-        - Authentic: <more authentic expression 2>
-
-        continue to find all the expressions until the end of the conversation.
-
+        {{
+            "words": [
+                {{"word": <word1>, "definition": <definition1>}},
+                {{"word": <word2>, "definition": <definition2>}},
+                {{"word": <word3>, "definition": <definition3>}},
+                ...
+            ]
+            "phrases": [
+                {{"phrase": <phrase1>, "definition": <definition1>}},
+                {{"phrase": <phrase2>, "definition": <definition2>}},
+                {{"phrase": <phrase3>, "definition": <definition3>}},
+                ...
+            ]
+            "expressions": [
+                {{"original": <original expression 1>, "authentic": <more authentic expression 1>}},
+                {{"original": <original expression 2>, "authentic": <more authentic expression 2>}},
+                {{"original": <original expression 3>, "authentic": <more authentic expression 3>}},
+                ...
+            ]
+        }}
+        ```     
         Output:
         """
 
         map_prompt = PromptTemplate.from_template(map_template)
-        map_chain = LLMChain(llm=self.llm, prompt=map_prompt, verbose=True)
+        llm_chain = LLMChain(llm=self.llm, prompt=map_prompt, verbose=True)
 
-        # Reduce
-        reduce_template = """The following text delimited by triple single quotes is set of Key words、phrases and expressions:
+        json_notes_list = []
+        for text in tqdm(self.text_chunks,
+                         total=len(self.text_chunks),
+                         desc="Generating dialogues"):
+            json_notes_list.append(llm_chain.run(text.page_content))
 
-        '''
-        {docs}
-        '''
-        
-        Take these and organize them into a summary of the lesson note. Please use the following output format:
-        
-        ```
-        ### words and phrases:
-        1. **word or phrase 1**
-        2. **word or phrase 2**
-
-        please list all the words and phrases
-        
-        ### Expression1:
-        - Original: <original sentence 1>
-        - Authentic: <more authentic expression 1>
-
-        ### Expression2:
-        - Original: <original sentence 2>
-        - Authentic: <more authentic expression 2>
-
-        please list all the expressions
-
-        Output:
-        """
-        reduce_prompt = PromptTemplate.from_template(reduce_template)
-
-        # Run chain
-        reduce_chain = LLMChain(llm=self.llm,
-                                prompt=reduce_prompt,
-                                verbose=True)
-
-        # Takes a list of documents, combines them into a single string, and passes this to an LLMChain
-        combine_documents_chain = StuffDocumentsChain(
-            llm_chain=reduce_chain, document_variable_name="docs")
-
-        # Combines and iteravely reduces the mapped documents
-        reduce_documents_chain = ReduceDocumentsChain(
-            # This is final chain that is called.
-            combine_documents_chain=combine_documents_chain,
-            # If documents exceed context for `StuffDocumentsChain`
-            collapse_documents_chain=combine_documents_chain,
-            # The maximum number of tokens to group documents into.
-            token_max=8000,
-        )
-
-        # Combining documents by mapping a chain over them, then combining results
-        map_reduce_chain = MapReduceDocumentsChain(
-            # Map chain
-            llm_chain=map_chain,
-            # Reduce chain
-            reduce_documents_chain=reduce_documents_chain,
-            # The variable name in the llm_chain to put the documents in
-            document_variable_name="docs",
-            # Return the results of the map steps in the output
-            return_intermediate_steps=False,
-        )
-
-        lesson_note = map_reduce_chain.run(self.text_chunks)
+        lesson_note = defaultdict(list)
+        for _ in json_notes_list:
+            _ = json.loads(_)
+            for key in _:
+                lesson_note[key].extend(_[key])
 
         return lesson_note
 
-    def generate_notes(self):
+    def generate_comments(self) -> str:
 
-        dialogues = self.generate_dialogue().strip()
-        summary = self.generate_summary().strip()
+        map_template = """I will give you some dialogues between students and an English teacher. Your task is to find the less authentic parts of the students' expressions and provide some comments.
+        {text}
+
+        Output:
+        """
+        map_prompt = PromptTemplate.from_template(map_template)
+
+        combine_prompt = """The following text contains some less authentic expressions and detailed comments given by the English teacher. Please use this content to create a comprehensive feedback report and provide suggestions on how students can improve their English speaking skills, preferably using students' expressions as examples.
+        {text}
+
+        Output:
+        """
+
+        combine_prompt = PromptTemplate.from_template(combine_prompt)
+
+        llm_chain = load_summarize_chain(
+            self.llm,
+            chain_type="map_reduce",
+            map_prompt=map_prompt,
+            combine_prompt=combine_prompt,
+            combine_document_variable_name="text",
+            map_reduce_document_variable_name="text")
+
+        comments = llm_chain.run(self.text_chunks)
+
+        return comments
+
+    def generate_notes(self) -> str:
+
+        dialogues = self.generate_dialogue()
+        summary = self.generate_summary()
+        comments = self.generate_comments()
+
+        dialogues_text = ""
+        for _ in dialogues["dialogues"]:
+            dialogues_text += "**Tutor**: " + _["tutor"] + "\n\n"
+            dialogues_text += "**Student**: " + _["student"] + "\n\n"
+
+        summary_text = ""
+        summary_text += "###Words:\n"
+        for _ in summary["words"]:
+            summary_text += "**{}**: ".format(
+                _["word"]) + _["definition"] + "\n\n"
+
+        summary_text += "###Phrases:\n"
+        for _ in summary["phrases"]:
+            summary_text += "**{}**: ".format(
+                _["phrase"]) + _["definition"] + "\n\n"
+
+        expression_text = ""
+        for _ in summary["expressions"]:
+            expression_text += "**Original**: " + _["original"] + "\n\n"
+            expression_text += "**Authentic**: " + _["authentic"] + "\n\n\n"
 
         # combine the dialogues and summary into a single document with markdown formatting
 
-        notes = f"""# Lesson Notes\n\n## Dialogues\n{dialogues}\n\n## Summary\n{summary}\n"""
+        notes = f"""# Lesson Notes\n\n##Dialogues:\n{dialogues_text}\n\n##Advanced words and phrases:\n{summary_text}\n\n##Expressions:\n{expression_text}\n\n## Comments\n{comments}\n"""
 
         return notes
 

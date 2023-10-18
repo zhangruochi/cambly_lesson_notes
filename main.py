@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Tue Oct 17 2023
+# Last Modified: Wed Oct 18 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -45,7 +45,7 @@ import os
 
 def main():
 
-    model = "base"
+    model = "small.en"
     input_file_path = "./lessons/2023-10-17-Zariah.mp4"
     transcription_output_path = os.path.join(
         os.path.dirname(input_file_path),
@@ -53,7 +53,7 @@ def main():
 
     if not os.path.exists(transcription_output_path):
         whisper = WhisperDecode(model)
-        transcription = whisper.decode(input_file_path,
+        transcription = whisper.transcribe(input_file_path,
                                        transcription_output_path)
         print("Transcription complete!")
     else:

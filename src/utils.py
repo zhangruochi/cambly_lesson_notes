@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Tue Oct 17 2023
+# Last Modified: Wed Oct 18 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -38,6 +38,7 @@
 
 import subprocess
 import sys
+import json
 
 import markdown
 import pdfkit
@@ -69,6 +70,7 @@ def convert_markdown_to_docx(input_file, output_file):
         print("Pandoc not found. Ensure it's installed and available in PATH.")
 
 
+    
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
