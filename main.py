@@ -42,9 +42,7 @@ from src.utils import convert_markdown_to_pdf
 from time import time
 import os
 
-
 def main():
-
     model = "small.en"
     input_file_path = "./lessons/2023-10-17-Zariah.mp4"
     transcription_output_path = os.path.join(

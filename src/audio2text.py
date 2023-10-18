@@ -41,26 +41,51 @@ import whisper
 import openai
 
 
+import os
+import whisper
+
 class WhisperDecode():
+    """
+    A class for transcribing audio files using the Whisper library.
+
+    Args:
+        model (str): The name of the model to use for transcription. Default is "base".
+        device (str): The device to use for running the model. Default is "cuda:0".
+
+    Attributes:
+        model: The Whisper model used for transcription.
+
+    Methods:
+        transcribe: Transcribes an audio file and saves the result to a text file.
+
+    """
 
     def __init__(self, model="base", device="cuda:0"):
         self.model = whisper.load_model(model, device=device)
 
-        # Transcription
     def transcribe(self, input_file_path, output_file_path):
+        """
+        Transcribes an audio file and saves the result to a text file.
 
+        Args:
+            input_file_path (str): The path to the input audio file.
+            output_file_path (str): The path to the output text file.
+
+        Returns:
+            str: The transcribed text.
+
+        """
         # Get the size of the file in bytes
         file_size = os.path.getsize(input_file_path)
 
         # Convert bytes to megabytes
         file_size_in_mb = file_size / (1024 * 1024)
-        # Check if the file size is less than 25 MB
 
+        # Check if the file size is less than 200 MB
         if file_size_in_mb < 200:
-            result = self.model.transcribe(input_file_path, verbose = True)["text"]
-
+            result = self.model.transcribe(input_file_path, verbose=True)["text"]
         else:
-            result = "Please provide a smaller audio file (less than 200mb)."
+            result = "Please provide a smaller audio file (less than 200 MB)."
 
         with open(output_file_path, "w") as f:
             f.write(result)
