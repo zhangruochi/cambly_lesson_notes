@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Wed Oct 18 2023
+# Last Modified: Thu Oct 19 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -43,6 +43,29 @@ import json
 import markdown
 import pdfkit
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+
+def is_json(text):
+    try:
+        json.loads(text)
+    except:
+        return False
+    return True
+
+
+def create_chunks(text_content: str = ""):
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=4000,
+        chunk_overlap=0,
+        length_function=len,
+        is_separator_regex=False,
+    )
+
+    text_chunks = text_splitter.create_documents([text_content])
+    return text_chunks
+
 
 def convert_markdown_to_pdf(input_file, output_file):
     # 从文件读取 markdown 内容
@@ -56,10 +79,10 @@ def convert_markdown_to_pdf(input_file, output_file):
     pdfkit.from_string(html_content, output_file)
 
 
-
 def convert_markdown_to_docx(input_file, output_file):
     try:
-        result = subprocess.run(['pandoc', input_file, '-o', output_file], check=True)
+        result = subprocess.run(['pandoc', input_file, '-o', output_file],
+                                check=True)
         if result.returncode == 0:
             print(f"Successfully converted {input_file} to {output_file}")
         else:
@@ -69,8 +92,6 @@ def convert_markdown_to_docx(input_file, output_file):
     except FileNotFoundError:
         print("Pandoc not found. Ensure it's installed and available in PATH.")
 
-
-    
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:

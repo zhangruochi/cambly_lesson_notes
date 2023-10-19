@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Wed Oct 18 2023
+# Last Modified: Thu Oct 19 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -39,12 +39,24 @@
 from src.audio2text import WhisperDecode
 from src.extraction import LessonsNoteGenerator
 from src.utils import convert_markdown_to_pdf
-from time import time
+from src.logger import StdLogger
+import datetime
 import os
+import argparse
 
-def main():
+
+
+
+
+
+def main(input_file_path, log_dir):
+
+    logger = StdLogger(file_path=os.path.join(
+        log_dir, "{}-{}.log".format(
+            os.path.basename(input_file_path).split(".")[0],
+            datetime.datetime.now().strftime("%Y-%m-%d"))))
+
     model = "small.en"
-    input_file_path = "./lessons/2023-10-17-Zariah.mp4"
     transcription_output_path = os.path.join(
         os.path.dirname(input_file_path),
         os.path.basename(input_file_path).split(".")[0] + ".txt")
@@ -53,7 +65,9 @@ def main():
         whisper = WhisperDecode(model)
         transcription = whisper.transcribe(input_file_path,
                                        transcription_output_path)
-        print("Transcription complete!")
+        logger.std_print(transcription)
+        logger.std_print(logger)
+
     else:
         with open(transcription_output_path, "r") as f:
             transcription = f.read()
@@ -61,7 +75,7 @@ def main():
     lesson_note_output_path = os.path.join(
         os.path.dirname(input_file_path),
         os.path.basename(input_file_path).split(".")[0] + "-lesson-note.md")
-    lesson_note_generator = LessonsNoteGenerator(text_content=transcription)
+    lesson_note_generator = LessonsNoteGenerator(transcription=transcription, logger = logger)
     lesson_note_generator.run(lesson_note_output_path)
 
     convert_markdown_to_pdf(lesson_note_output_path,
@@ -70,4 +84,10 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    # use argparse to parse command line arguments
+    parser = argparse.ArgumentParser(description='Cambly lesson note generator')
+    parser.add_argument('-i', '--input', help='input audio file path', required=True)
+    parser.add_argument('-l', '--log_dir', help='log directory', default="logs", required=False)
+
+    args = parser.parse_args()
+    main(args.input, args.log_dir)

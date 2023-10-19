@@ -7,7 +7,7 @@
 # Author: Ruochi Zhang
 # Email: zrc720@gmail.com
 # -----
-# Last Modified: Wed Oct 18 2023
+# Last Modified: Thu Oct 19 2023
 # Modified By: Ruochi Zhang
 # -----
 # Copyright (c) 2023 Bodkin World Domination Enterprises
@@ -38,12 +38,11 @@
 import os
 from dotenv import load_dotenv
 
-import openai
 from langchain.chat_models import ChatOpenAI
 from langchain import PromptTemplate
 from langchain.chains.summarize import load_summarize_chain
 from langchain.chains import LLMChain
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from .utils import create_chunks, is_json
 
 from tqdm import tqdm
 import json
@@ -54,42 +53,76 @@ from collections import defaultdict
 load_dotenv()
 
 
+
 class LessonsNoteGenerator():
     """
-    This module defines the LessonsNoteGenerator class, which is responsible for generating dialogue, summary, and comments for a given text content. The class uses the ChatOpenAI and LLMChain models to generate the output. 
+    A class that generates lesson notes for English tutors based on student conversations.
 
     Attributes:
-        text_content (str): The text content to be processed.
+    -----------
+    transcription : str
+        The transcription of the student conversation.
 
     Methods:
-        __init__(self, text_content: str = ""): Initializes the LessonsNoteGenerator object.
-        preprocess(self, text_content: str = ""): Preprocesses the text content by splitting it into chunks.
-        generate_dialogue(self) -> Dict: Generates a dialogue between an English tutor and a student using the given text content.
-        generate_summary(self) -> Dict: Generates a summary of the given text content by identifying advanced words and phrases and correcting grammar and rephrasing expressions.
-        generate_comments(self) -> str: Generates comments on the less authentic parts of the students' expressions and provides suggestions on how to improve their English speaking skills.
+    --------
+    generate_dialogue(raw_transcrib_text: str) -> Dict:
+        Generates a dialogue between the student and the tutor.
+
+    generate_knowledge_points(dialogues: str) -> Dict:
+        Generates knowledge points for the tutor based on the student conversation.
+
+    generate_comments(dialogues: str) -> str:
+        Generates comments for the tutor to provide feedback to the student.
     """
 
-    def __init__(self, text_content: str = ""):
+    def __init__(self, transcription: str, logger):
 
         self.llm = ChatOpenAI(model_name=os.getenv("model"),
                               temperature=0,
                               openai_api_key=os.getenv("OPENAI_API_KEY"))
+        self.transcription = transcription
+        self.logger = logger
 
-        self.text_chunks = self.preprocess(text_content)
+    def json_fixer(self, text) -> str:
+        """
+        Fix the json format of the text using LLM
+        """
 
-    def preprocess(self, text_content: str = ""):
+        template = """The text delimited by triple single quotes is json format but contains some errors. Please fix the errors and make sure the json format is correct.
+        ```{text}```
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=4000,
-            chunk_overlap=0,
-            length_function=len,
-            is_separator_regex=False,
-        )
+        Output: 
+        """
 
-        text_chunks = text_splitter.create_documents([text_content])
-        return text_chunks
+        prompt_template = PromptTemplate.from_template(template=template)
 
-    def generate_dialogue(self) -> Dict:
+        # initialize LLMChain by passing LLM and prompt template
+        llm_chain = LLMChain(llm=self.llm,
+                             prompt=prompt_template,
+                             verbose=True)
+
+        text = llm_chain.run(text)
+
+        return text
+
+    def generate_dialogue(self, raw_transcrib_text) -> Dict:
+        """
+            Generates a dialogue between a tutor and a student based on a given text.
+
+            Args:
+            - raw_transcrib_text: A string representing the raw text to generate a dialogue from.
+
+            Returns:
+            - A dictionary containing the generated dialogues in the following format:
+                {
+                    dialogues: [
+                        {tutor: <tutor's expression 1>, student: <student's expression 1>},
+                        {tutor: <tutor's expression 2>, student: <student's expression 2>},
+                        {tutor: <tutor's expression 3>, student: <student's expression 3>},
+                        ... 
+                    ]
+                }
+        """
 
         template = """
             The text delimited by triple single quotes is a real conversation between two people, one being an English tutor and the other a student. The student want the tutor to help him improve his spoken english. Please organize the conversation between the two and use the output format I provide.
@@ -115,20 +148,41 @@ class LessonsNoteGenerator():
                              prompt=prompt_template,
                              verbose=True)
 
+        text_chunks = create_chunks(raw_transcrib_text)
+
         dialogues = []
-        for text in tqdm(self.text_chunks,
-                         total=len(self.text_chunks),
+        for text in tqdm(text_chunks,
+                         total=len(text_chunks),
                          desc="Generating dialogues"):
             dialogues.append(llm_chain.run(text.page_content))
 
         dialogues_dict = defaultdict(list)
         for _ in dialogues:
-            _ = json.loads(_)
-            dialogues_dict["dialogues"].extend(_["dialogues"])
+
+            if is_json(_):
+                _ = json.loads(_)
+                dialogues_dict["dialogues"].extend(_["dialogues"])
+            else:
+                self.logger.std_print(_)
+                _ = self.json_fixer(_)
+
+                if is_json(_):
+                    self.std_print("json is fixed")
+                    _ = json.loads(_)
+                    dialogues_dict["dialogues"].extend(_["dialogues"])
 
         return dialogues_dict
 
-    def generate_summary(self) -> Dict:
+    def generate_knowledge_points(self, dialogues: str) -> Dict:
+        """
+            Generates knowledge points from a set of dialogues between an English tutor and a student.
+
+            Args:
+            - dialogues (str): The set of dialogues between an English tutor and a student.
+
+            Returns:
+            - A dictionary containing the advanced words, phrases, and expressions that appeared in the conversation.
+        """
 
         # Map
         map_template = """The following text delimited by triple single quotes is a set of dialogues between an english tutor and a student:
@@ -137,7 +191,7 @@ class LessonsNoteGenerator():
         {docs}
         ```
         
-        Please identify the advanced words and phrases that appeared in the conversation. For each paragraph spoken by the student(do not separate into sentences, use the students' each complete expression.), please correct the grammar and rephrase the expression in a more native and authentic way. 
+        Please identify the advanced words and phrases that appeared in the conversation. Modify each student's response to make it more authentic and more native. Maintain the integrity of the student's speech and do not break a paragraph into multiple sentences.
         IMPORTANT: Folloing the JSON format below strictly is the key to success:
 
         ```
@@ -155,9 +209,9 @@ class LessonsNoteGenerator():
                 ...
             ]
             "expressions": [
-                {{"original": <original expression 1>, "authentic": <more authentic expression 1>}},
-                {{"original": <original expression 2>, "authentic": <more authentic expression 2>}},
-                {{"original": <original expression 3>, "authentic": <more authentic expression 3>}},
+                {{"original": <original response 1>, "authentic": <more authentic response 1>}},
+                {{"original": <original response 2>, "authentic": <more authentic response 2>}},
+                {{"original": <original response 3>, "authentic": <more authentic response 3>}},
                 ...
             ]
         }}
@@ -167,22 +221,33 @@ class LessonsNoteGenerator():
 
         map_prompt = PromptTemplate.from_template(map_template)
         llm_chain = LLMChain(llm=self.llm, prompt=map_prompt, verbose=True)
+        text_chunks = create_chunks(dialogues)
 
         json_notes_list = []
-        for text in tqdm(self.text_chunks,
-                         total=len(self.text_chunks),
-                         desc="Generating dialogues"):
+        for text in tqdm(text_chunks,
+                         total=len(text_chunks),
+                         desc="Generating knowledge points"):
             json_notes_list.append(llm_chain.run(text.page_content))
 
         lesson_note = defaultdict(list)
         for _ in json_notes_list:
-            _ = json.loads(_)
-            for key in _:
-                lesson_note[key].extend(_[key])
+
+            if is_json(_):
+                _ = json.loads(_)
+                for key in _:
+                    lesson_note[key].extend(_[key])
+            else:
+                self.logger.std_print(_)
+                _ = self.json_fixer(_)
+                if is_json(_):
+                    self.std_print("json is fixed")
+                    _ = json.loads(_)
+                    for key in _:
+                        lesson_note[key].extend(_[key])
 
         return lesson_note
 
-    def generate_comments(self) -> str:
+    def generate_comments(self, dialogues: str) -> str:
 
         map_template = """I will give you some dialogues between students and an English teacher. Your task is to find the less authentic parts of the students' expressions and provide some comments.
         {text}
@@ -191,7 +256,7 @@ class LessonsNoteGenerator():
         """
         map_prompt = PromptTemplate.from_template(map_template)
 
-        combine_prompt = """The following text contains some less authentic expressions and detailed comments given by the English teacher. Please use this content to create a comprehensive feedback report and provide suggestions on how students can improve their English speaking skills, preferably using students' expressions as examples.
+        combine_prompt = """The following text contains some less authentic expressions and detailed comments given by the English teacher. Please use this content to create a comprehensive feedback report and provide suggestions on how students can improve their English speaking skills. It is best to clearly point out the areas where the student's speech is not native and provide suggestions for improvement.
         {text}
 
         Output:
@@ -205,22 +270,24 @@ class LessonsNoteGenerator():
             map_prompt=map_prompt,
             combine_prompt=combine_prompt,
             combine_document_variable_name="text",
-            map_reduce_document_variable_name="text")
+            map_reduce_document_variable_name="text",
+            verbose = True)
 
-        comments = llm_chain.run(self.text_chunks)
+        text_chunks = create_chunks(dialogues)
+        comments = llm_chain.run(text_chunks)
 
         return comments
 
-    def generate_notes(self) -> str:
+    def generate_notes(self, transcription: str) -> str:
 
-        dialogues = self.generate_dialogue()
-        summary = self.generate_summary()
-        comments = self.generate_comments()
-
+        dialogues = self.generate_dialogue(transcription)
         dialogues_text = ""
         for _ in dialogues["dialogues"]:
             dialogues_text += "**Tutor**: " + _["tutor"] + "\n\n"
             dialogues_text += "**Student**: " + _["student"] + "\n\n"
+
+        summary = self.generate_knowledge_points(dialogues_text)
+        comments = self.generate_comments(dialogues_text)
 
         cache = set()
 
@@ -264,4 +331,4 @@ class LessonsNoteGenerator():
             output (str): The path to the file where the notes will be written.
         """
         with open(output, "w") as f:
-            f.write(self.generate_notes())
+            f.write(self.generate_notes(self.transcription))
